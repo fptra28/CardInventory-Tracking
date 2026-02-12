@@ -23,6 +23,10 @@ class _NewPageState extends State<NewPage> {
   String _search = '';
   // Filter chip yang sedang aktif.
   String _filter = 'Semua';
+  String _ownedFilter = 'Semua';
+  String _setFilter = 'Semua';
+  String _rarityFilter = 'Semua';
+  int _navIndex = 2;
 
   @override
   void initState() {
@@ -78,11 +82,36 @@ class _NewPageState extends State<NewPage> {
       }
     }
 
+    bool matchesOwned(CardItem item) {
+      switch (_ownedFilter) {
+        case 'Owned':
+          return item.owned;
+        case 'Wish':
+          return !item.owned;
+        default:
+          return true;
+      }
+    }
+
+    bool matchesSet(CardItem item) {
+      if (_setFilter == 'Semua') return true;
+      return item.setName == _setFilter;
+    }
+
+    bool matchesRarity(CardItem item) {
+      if (_rarityFilter == 'Semua') return true;
+      return item.rarity.toLowerCase().contains(_rarityFilter.toLowerCase());
+    }
+
     return items.where((item) {
       final matchesQuery = query.isEmpty ||
           item.name.toLowerCase().contains(query) ||
           item.setName.toLowerCase().contains(query);
-      return matchesQuery && matchesFilter(item);
+      return matchesQuery &&
+          matchesFilter(item) &&
+          matchesOwned(item) &&
+          matchesSet(item) &&
+          matchesRarity(item);
     }).toList();
   }
 
@@ -92,7 +121,6 @@ class _NewPageState extends State<NewPage> {
     final filteredItems = _applyFilters(_items);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F4F7),
       // Tombol tambah kartu.
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
@@ -118,28 +146,80 @@ class _NewPageState extends State<NewPage> {
         foregroundColor: Colors.white,
         child: const Icon(Icons.add),
       ),
-      body: SafeArea(
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : _items.isEmpty
-                ? const Center(
-                    child: Text('Belum ada kartu. Tambah dulu ya!'),
-                  )
-                : Column(
+      body: Stack(
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFFFFF3C4),
+                  Color(0xFFEFF4FF),
+                  Color(0xFFFBE8FF),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            top: -80,
+            right: -60,
+            child: Container(
+              height: 220,
+              width: 220,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFD166).withOpacity(0.35),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -100,
+            left: -40,
+            child: Container(
+              height: 240,
+              width: 240,
+              decoration: BoxDecoration(
+                color: const Color(0xFF9B8BFF).withOpacity(0.25),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                // Header + search + filter chips.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Header + search + filter chips.
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                IconButton(
-                                  onPressed: () => Navigator.of(context).pop(),
-                                  icon: const Icon(Icons.arrow_back),
+                      Row(
+                        children: [
+                          Container(
+                            height: 46,
+                            width: 46,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.08),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 8),
                                 ),
-                                const SizedBox(width: 4),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.collections_bookmark,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                                 Text(
                                   'Koleksi Kartu',
                                   style: Theme.of(context)
@@ -147,137 +227,452 @@ class _NewPageState extends State<NewPage> {
                                       .titleLarge
                                       ?.copyWith(fontWeight: FontWeight.bold),
                                 ),
-                                const Spacer(),
-                                Container(
-                                  height: 38,
-                                  width: 38,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: const Icon(Icons.tune),
+                                Text(
+                                  'Kelola dan cari kartu favoritmu',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(color: Colors.black54),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 12),
-                            TextField(
-                              decoration: InputDecoration(
-                                hintText: 'Cari nama kartu atau set',
-                                prefixIcon: const Icon(Icons.search),
-                                filled: true,
-                                fillColor: Colors.white,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide.none,
-                                ),
-                              ),
-                              onChanged: (value) {
-                                setState(() => _search = value);
+                          ),
+                          Container(
+                            height: 40,
+                            width: 40,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: IconButton(
+                              padding: EdgeInsets.zero,
+                              icon: const Icon(Icons.tune),
+                              onPressed: () {
+                                showModalBottomSheet<void>(
+                                  context: context,
+                                  showDragHandle: true,
+                                  shape: const RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.vertical(
+                                      top: Radius.circular(24),
+                                    ),
+                                  ),
+                                  builder: (context) {
+                                    String tempFilter = _filter;
+                                    String tempOwned = _ownedFilter;
+                                    String tempSet = _setFilter;
+                                    String tempRarity = _rarityFilter;
+                                    final setOptions = <String>{
+                                      'Semua',
+                                      ..._items.map((item) => item.setName),
+                                    }.toList();
+                                    final rarityOptions = <String>{
+                                      'Semua',
+                                      ..._items.map((item) => item.rarity),
+                                    }.toList();
+                                    return StatefulBuilder(
+                                      builder: (context, sheetSetState) {
+                                        return Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            20,
+                                            8,
+                                            20,
+                                            24,
+                                          ),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Filter Koleksi',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 12),
+                                              Text(
+                                                'Status',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Wrap(
+                                                spacing: 8,
+                                                runSpacing: 8,
+                                                children: [
+                                                  _FilterChip(
+                                                    label: 'Semua',
+                                                    selected:
+                                                        tempOwned == 'Semua',
+                                                    onTap: () {
+                                                      sheetSetState(() {
+                                                        tempOwned = 'Semua';
+                                                      });
+                                                    },
+                                                  ),
+                                                  _FilterChip(
+                                                    label: 'Owned',
+                                                    selected:
+                                                        tempOwned == 'Owned',
+                                                    onTap: () {
+                                                      sheetSetState(() {
+                                                        tempOwned = 'Owned';
+                                                      });
+                                                    },
+                                                  ),
+                                                  _FilterChip(
+                                                    label: 'Wish',
+                                                    selected:
+                                                        tempOwned == 'Wish',
+                                                    onTap: () {
+                                                      sheetSetState(() {
+                                                        tempOwned = 'Wish';
+                                                      });
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 16),
+                                              Text(
+                                                'Rarity',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Wrap(
+                                                spacing: 8,
+                                                runSpacing: 8,
+                                                children: rarityOptions
+                                                    .map(
+                                                      (rarity) => _FilterChip(
+                                                        label: rarity,
+                                                        selected:
+                                                            tempRarity == rarity,
+                                                        onTap: () {
+                                                          sheetSetState(() {
+                                                            tempRarity = rarity;
+                                                          });
+                                                        },
+                                                      ),
+                                                    )
+                                                    .toList(),
+                                              ),
+                                              const SizedBox(height: 16),
+                                              Text(
+                                                'Set',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Wrap(
+                                                spacing: 8,
+                                                runSpacing: 8,
+                                                children: setOptions
+                                                    .map(
+                                                      (setName) => _FilterChip(
+                                                        label: setName,
+                                                        selected:
+                                                            tempSet == setName,
+                                                        onTap: () {
+                                                          sheetSetState(() {
+                                                            tempSet = setName;
+                                                          });
+                                                        },
+                                                      ),
+                                                    )
+                                                    .toList(),
+                                              ),
+                                              const SizedBox(height: 16),
+                                              Wrap(
+                                                spacing: 8,
+                                                runSpacing: 8,
+                                                children: [
+                                                  _FilterChip(
+                                                    label: 'Semua',
+                                                    selected:
+                                                        tempFilter == 'Semua',
+                                                    onTap: () {
+                                                      sheetSetState(() {
+                                                        tempFilter = 'Semua';
+                                                      });
+                                                    },
+                                                  ),
+                                                  _FilterChip(
+                                                    label: 'Rare',
+                                                    selected:
+                                                        tempFilter == 'Rare',
+                                                    onTap: () {
+                                                      sheetSetState(() {
+                                                        tempFilter = 'Rare';
+                                                      });
+                                                    },
+                                                  ),
+                                                  _FilterChip(
+                                                    label: 'Holo',
+                                                    selected:
+                                                        tempFilter == 'Holo',
+                                                    onTap: () {
+                                                      sheetSetState(() {
+                                                        tempFilter = 'Holo';
+                                                      });
+                                                    },
+                                                  ),
+                                                  _FilterChip(
+                                                    label: 'Promo',
+                                                    selected:
+                                                        tempFilter == 'Promo',
+                                                    onTap: () {
+                                                      sheetSetState(() {
+                                                        tempFilter = 'Promo';
+                                                      });
+                                                    },
+                                                  ),
+                                                  _FilterChip(
+                                                    label: 'Duplikat',
+                                                    selected:
+                                                        tempFilter == 'Duplikat',
+                                                    onTap: () {
+                                                      sheetSetState(() {
+                                                        tempFilter =
+                                                            'Duplikat';
+                                                      });
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 16),
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: OutlinedButton(
+                                                      onPressed: () {
+                                                        setState(() {
+                                                          _filter = 'Semua';
+                                                          _ownedFilter =
+                                                              'Semua';
+                                                          _setFilter = 'Semua';
+                                                          _rarityFilter =
+                                                              'Semua';
+                                                        });
+                                                        Navigator.of(context)
+                                                            .pop();
+                                                      },
+                                                      child:
+                                                          const Text('Reset'),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: ElevatedButton(
+                                                      onPressed: () {
+                                                        setState(() {
+                                                          _filter = tempFilter;
+                                                          _ownedFilter =
+                                                              tempOwned;
+                                                          _setFilter = tempSet;
+                                                          _rarityFilter =
+                                                              tempRarity;
+                                                        });
+                                                        Navigator.of(context)
+                                                            .pop();
+                                                      },
+                                                      style: ElevatedButton
+                                                          .styleFrom(
+                                                        backgroundColor:
+                                                            const Color(
+                                                                0xFF101828),
+                                                        foregroundColor:
+                                                            Colors.white,
+                                                      ),
+                                                      child:
+                                                          const Text('Terapkan'),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                );
                               },
                             ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              height: 38,
-                              child: ListView(
-                                scrollDirection: Axis.horizontal,
-                                children: [
-                                  _FilterChip(
-                                    label: 'Semua',
-                                    selected: _filter == 'Semua',
-                                    onTap: () {
-                                      setState(() => _filter = 'Semua');
-                                    },
-                                  ),
-                                  _FilterChip(
-                                    label: 'Rare',
-                                    selected: _filter == 'Rare',
-                                    onTap: () {
-                                      setState(() => _filter = 'Rare');
-                                    },
-                                  ),
-                                  _FilterChip(
-                                    label: 'Holo',
-                                    selected: _filter == 'Holo',
-                                    onTap: () {
-                                      setState(() => _filter = 'Holo');
-                                    },
-                                  ),
-                                  _FilterChip(
-                                    label: 'Promo',
-                                    selected: _filter == 'Promo',
-                                    onTap: () {
-                                      setState(() => _filter = 'Promo');
-                                    },
-                                  ),
-                                  _FilterChip(
-                                    label: 'Duplikat',
-                                    selected: _filter == 'Duplikat',
-                                    onTap: () {
-                                      setState(() => _filter = 'Duplikat');
-                                    },
-                                  ),
-                                ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.06),
+                              blurRadius: 14,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.search, color: Colors.black45),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: TextField(
+                                decoration: const InputDecoration(
+                                  hintText: 'Cari nama kartu atau set',
+                                  border: InputBorder.none,
+                                ),
+                                onChanged: (value) {
+                                  setState(() => _search = value);
+                                },
                               ),
                             ),
                           ],
                         ),
                       ),
-                      Expanded(
-                        child: filteredItems.isEmpty
-                            ? const Center(
-                                child: Text('Tidak ada kartu yang cocok.'),
-                              )
-                            : ListView.builder(
-                                padding:
-                                    const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                                itemCount: filteredItems.length,
-                                itemBuilder: (context, index) {
-                                  return _CardTile(
-                                    item: filteredItems[index],
-                                    onEdit: (item) async {
-                                      final result = await Navigator.of(context)
-                                          .push<Map<String, dynamic>>(
-                                        MaterialPageRoute(
-                                          builder: (context) => EditCardPage(
-                                            initialName: item.name,
-                                            initialSet: item.setName,
-                                            initialNumber: item.number,
-                                            initialRarity: item.rarity,
-                                            initialOwned: item.owned,
-                                            initialImagePath: item.imagePath,
-                                          ),
-                                        ),
-                                      );
-                                      if (result == null || !context.mounted) {
-                                        return;
-                                      }
-                                      final updated = item.copyWith(
-                                        name: result['name'] as String,
-                                        setName: result['set'] as String,
-                                        number: result['number'] as String,
-                                        rarity: result['rarity'] as String,
-                                        owned: result['owned'] as bool,
-                                        imagePath: result['imagePath'] as String?,
-                                      );
-                                      await CardRepository.instance
-                                          .update(updated);
-                                      await _load();
-                                    },
-                                    onTap: () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (context) => CardDetailPage(
-                                            item: filteredItems[index],
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  );
-                                },
-                              ),
-                      ),
+                      const SizedBox(height: 8),
                     ],
                   ),
+                ),
+                Expanded(
+                  child: _loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _items.isEmpty
+                          ? const Center(
+                              child: Text('Belum ada kartu. Tambah dulu ya!'),
+                            )
+                          : filteredItems.isEmpty
+                              ? const Center(
+                                  child: Text('Tidak ada kartu yang cocok.'),
+                                )
+                              : ListView.builder(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                                  itemCount: filteredItems.length,
+                                  itemBuilder: (context, index) {
+                                    return _CardTile(
+                                      item: filteredItems[index],
+                                      onEdit: (item) async {
+                                        final result =
+                                            await Navigator.of(context)
+                                                .push<Map<String, dynamic>>(
+                                          MaterialPageRoute(
+                                            builder: (context) => EditCardPage(
+                                              initialName: item.name,
+                                              initialSet: item.setName,
+                                              initialNumber: item.number,
+                                              initialRarity: item.rarity,
+                                              initialOwned: item.owned,
+                                              initialImagePath: item.imagePath,
+                                            ),
+                                          ),
+                                        );
+                                        if (result == null ||
+                                            !context.mounted) {
+                                          return;
+                                        }
+                                        final updated = item.copyWith(
+                                          name: result['name'] as String,
+                                          setName: result['set'] as String,
+                                          number: result['number'] as String,
+                                          rarity: result['rarity'] as String,
+                                          owned: result['owned'] as bool,
+                                          imagePath:
+                                              result['imagePath'] as String?,
+                                        );
+                                        await CardRepository.instance
+                                            .update(updated);
+                                        await _load();
+                                      },
+                                      onTap: () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                CardDetailPage(
+                                              item: filteredItems[index],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: Colors.white,
+        selectedItemColor: const Color(0xFF101828),
+        unselectedItemColor: const Color(0xFF98A2B3),
+        showUnselectedLabels: true,
+        elevation: 12,
+        currentIndex: _navIndex,
+        onTap: (index) {
+          if (index == 2) {
+            setState(() => _navIndex = 2);
+            return;
+          }
+          if (index == 0) {
+            Navigator.of(context).pop();
+            return;
+          }
+          setState(() => _navIndex = index);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Menu belum tersedia.')),
+          );
+        },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.explore_outlined),
+            activeIcon: Icon(Icons.explore),
+            label: 'Explore',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.collections_bookmark_outlined),
+            activeIcon: Icon(Icons.collections_bookmark),
+            label: 'Koleksi',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            activeIcon: Icon(Icons.person),
+            label: 'Profile',
+          ),
+        ],
       ),
     );
   }

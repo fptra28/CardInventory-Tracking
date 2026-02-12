@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'card_repository.dart';
+import 'explore_page.dart';
 import 'listPokemon.dart';
 
 void main() {
@@ -59,17 +61,43 @@ class _MyHomePageState extends State<MyHomePage> {
   List<CardItem> _items = [];
   bool _loading = true;
   String? _errorMessage;
+  int _navIndex = 0;
+  late final PageController _setPageController =
+      PageController(viewportFraction: 0.92, initialPage: _setPageIndex);
+  Timer? _setAutoTimer;
+  int _setPageIndex = 10000;
+  List<String> _setNames = [];
+  Map<String, int> _setCounts = {};
 
   @override
   void initState() {
     super.initState();
     _load();
+    _setAutoTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      if (!mounted || _setNames.length <= 1) {
+        return;
+      }
+      _setPageIndex += 1;
+      _setPageController.animateToPage(
+        _setPageIndex,
+        duration: const Duration(milliseconds: 700),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _setAutoTimer?.cancel();
+    _setPageController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
     try {
       final items = await CardRepository.instance.getAll();
       if (!mounted) return;
+      _rebuildSetSummary(items);
       setState(() {
         _items = items;
         _errorMessage = null;
@@ -84,6 +112,22 @@ class _MyHomePageState extends State<MyHomePage> {
       setState(() {
         _loading = false;
       });
+    }
+  }
+
+  void _rebuildSetSummary(List<CardItem> items) {
+    final counts = <String, int>{};
+    final names = <String>[];
+    for (final item in items) {
+      counts[item.setName] = (counts[item.setName] ?? 0) + 1;
+      if (!names.contains(item.setName)) {
+        names.add(item.setName);
+      }
+    }
+    _setCounts = counts;
+    _setNames = names;
+    if (_setNames.isEmpty) {
+      _setPageIndex = 10000;
     }
   }
 
@@ -109,13 +153,71 @@ class _MyHomePageState extends State<MyHomePage> {
     final total = _items.length;
     final rareCount = _countRare(_items);
     final ownedCount = _items.where((item) => item.owned).length;
-    final progressTarget = 60;
-    final progressValue =
-        total == 0 ? 0.0 : (total / progressTarget).clamp(0.0, 1.0);
     final recentItems =
         _items.length <= 3 ? _items : _items.sublist(0, 3);
 
     return Scaffold(
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: Colors.white,
+        selectedItemColor: const Color(0xFF101828),
+        unselectedItemColor: const Color(0xFF98A2B3),
+        showUnselectedLabels: true,
+        elevation: 12,
+        currentIndex: _navIndex,
+        onTap: (index) async {
+          if (index == 0) {
+            setState(() => _navIndex = 0);
+            return;
+          }
+          if (index == 2) {
+            setState(() => _navIndex = 2);
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => const NewPage(),
+              ),
+            );
+            if (!mounted) return;
+            setState(() => _navIndex = 0);
+            await _load();
+            return;
+          }
+          if (index == 1) {
+            setState(() => _navIndex = 1);
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => const ExplorePage(),
+              ),
+            );
+            if (!mounted) return;
+            setState(() => _navIndex = 0);
+            return;
+          }
+          setState(() => _navIndex = index);
+        },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.explore_outlined),
+            activeIcon: Icon(Icons.explore),
+            label: 'Explore',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.collections_bookmark_outlined),
+            activeIcon: Icon(Icons.collections_bookmark),
+            label: 'Koleksi',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            activeIcon: Icon(Icons.person),
+            label: 'Profile',
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           Container(
@@ -247,50 +349,72 @@ class _MyHomePageState extends State<MyHomePage> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _ProgressCard(
-                    title: 'Target Set Kanto',
-                    progressLabel: '$total / $progressTarget kartu',
-                    progress: progressValue,
-                  ),
+                  if (_setNames.isEmpty)
+                    const _SetSummaryCard(title: 'Set Kanto', count: 0)
+                  else
+                    SizedBox(
+                      height: 140,
+                      child: PageView.builder(
+                        controller: _setPageController,
+                        clipBehavior: Clip.none,
+                        padEnds: false,
+                        onPageChanged: (index) {
+                          _setPageIndex = index;
+                        },
+                        itemBuilder: (context, index) {
+                          if (_setNames.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
+                          final realIndex = index % _setNames.length;
+                          final setName = _setNames[realIndex];
+                          final count = _setCounts[setName] ?? 0;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 12, bottom: 8),
+                            child: _SetSummaryCard(
+                              title: setName,
+                              count: count,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   const SizedBox(height: 24),
-                  Text(
-                    'Terbaru Ditambahkan',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleLarge
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 156,
-                    child: _loading
-                        ? const Center(child: CircularProgressIndicator())
-                        : _errorMessage != null
-                            ? Center(
-                                child: Text(
-                                  _errorMessage!,
-                                  textAlign: TextAlign.center,
+                  if (_loading || _errorMessage != null || recentItems.isNotEmpty) ...[
+                    Text(
+                      'Terbaru Ditambahkan',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 156,
+                      child: _loading
+                          ? const Center(child: CircularProgressIndicator())
+                          : _errorMessage != null
+                              ? Center(
+                                  child: Text(
+                                    _errorMessage!,
+                                    textAlign: TextAlign.center,
+                                  ),
+                                )
+                              : ListView(
+                                  scrollDirection: Axis.horizontal,
+                                  children: recentItems
+                                      .map(
+                                        (item) => _MiniCard(
+                                          name: item.name,
+                                          setName: item.setName,
+                                          accent: Color(item.accent),
+                                          imagePath: item.imagePath,
+                                        ),
+                                      )
+                                      .toList(),
                                 ),
-                              )
-                        : recentItems.isEmpty
-                            ? const Center(
-                                child: Text('Belum ada kartu.'),
-                              )
-                            : ListView(
-                                scrollDirection: Axis.horizontal,
-                                children: recentItems
-                                    .map(
-                                      (item) => _MiniCard(
-                                        name: item.name,
-                                        setName: item.setName,
-                                        accent: Color(item.accent),
-                                        imagePath: item.imagePath,
-                                      ),
-                                    )
-                                    .toList(),
-                              ),
-                  ),
-                  const SizedBox(height: 24),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(18),
@@ -476,6 +600,98 @@ class _ProgressCard extends StatelessWidget {
               minHeight: 10,
               backgroundColor: const Color(0xFFE4E7EC),
               valueColor: const AlwaysStoppedAnimation(Color(0xFF101828)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SetSummaryCard extends StatelessWidget {
+  const _SetSummaryCard({required this.title, required this.count});
+
+  final String title;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = count == 0 ? const Color(0xFF98A2B3) : const Color(0xFF101828);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFFFFFFF),
+            Color(0xFFF6F4FF),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE4E7EC)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            height: 52,
+            width: 52,
+            decoration: BoxDecoration(
+              color: accent.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(
+              Icons.collections_bookmark,
+              color: accent,
+              size: 26,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '$count kartu',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: accent,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '$count',
+              style: Theme.of(context)
+                  .textTheme
+                  .labelLarge
+                  ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
             ),
           ),
         ],
